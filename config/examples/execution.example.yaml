@@ -1,0 +1,26 @@
+# Example execution.yaml with the engine turned on. Remember: this
+# ALSO needs permissions.yaml to grant the requester ("cowork" by
+# default) the specific category.action scopes it should be able to
+# use — enabling the engine alone grants nothing.
+
+enabled: true
+
+audit_log_path: logs/execution_audit.jsonl
+
+terminal:
+  # Only these executables can be run via the terminal category — a
+  # deliberately short, reviewed list, not "anything on PATH."
+  allowed_commands:
+    - git
+    - python
+  timeout_seconds: 60.0
+
+browser:
+  enabled: true
+  engine: chromium
+  headless: true
+  download_dir: data/browser/downloads
+  timeout_seconds: 45.0
+  search_url_template: "https://html.duckduckgo.com/html/?q={query}"
+
+default_requester: cowork

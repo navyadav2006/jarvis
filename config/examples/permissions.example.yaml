@@ -1,0 +1,98 @@
+# Example permissions.yaml with real rules, demonstrating the
+# precedence rules implemented in
+# src/jarvis/core/config/permissions_config.py: PermissionsConfig.is_allowed().
+#
+#   1. An exact plugin-name rule is checked before any "*" wildcard rule.
+#   2. Within a single rule, `deny` always beats `allow`.
+#   3. If nothing matches, `default_policy` decides.
+#
+# Capability scopes are free-form dotted strings — Jarvis does not
+# enumerate a fixed list, since plugins may introduce their own. The
+# examples below (automation.mouse, automation.keyboard,
+# filesystem.read, filesystem.write, network.http, browser.control)
+# are the scopes expected to matter once PyAutoGUI/Playwright-backed
+# automation exists.
+#
+# As of Phase 15, core/execution/engine.py's ExecutionEngine is the
+# first real is_allowed() caller — every action Claude Cowork requests
+# is checked against a rule here for `plugin: cowork` (or whichever
+# execution.yaml's `default_requester` is set to) before it runs.
+#
+# As of Phase 18, core/plugin_loader.py's PluginLoader is the second:
+# a plugin declaring `required_permissions` is refused loading (not
+# loaded-then-restricted) unless every scope is granted here, keyed by
+# the plugin's own `name` — see src/jarvis/plugins/examples/'s six
+# reference plugins for `network.http`/`email.send` (custom,
+# plugin-defined scopes — is_allowed() doesn't require them to be one
+# of the built-in execution categories).
+
+default_policy: deny
+
+rules:
+  # What Cowork-requested actions (execution.yaml's default_requester)
+  # may do — deliberately narrow: read/write files and run a shell
+  # command, but never touch the mouse/keyboard or close applications.
+  - plugin: cowork
+    allow:
+      - filesystem.read
+      - filesystem.write
+      - terminal.run
+      - clipboard.read
+      - clipboard.write
+      - screenshot.capture
+      - window.read
+      - browser.control
+    deny:
+      - automation.mouse
+      - automation.keyboard
+      - application.close
+
+  # The notes plugin may read and write files, but never touch the
+  # mouse/keyboard or the network.
+  - plugin: notes
+    allow:
+      - filesystem.read
+      - filesystem.write
+    deny:
+      - automation.mouse
+      - automation.keyboard
+      - network.http
+
+  # The browser-automation plugin may drive a browser and read files,
+  # but explicitly not the keyboard/mouse outside the browser context
+  # (browser.control is a separate, narrower scope than automation.keyboard).
+  - plugin: browser_automation
+    allow:
+      - browser.control
+      - filesystem.read
+    deny:
+      - automation.keyboard
+      - automation.mouse
+
+  # The six reference example plugins (src/jarvis/plugins/examples/),
+  # granted exactly the scope each one's `required_permissions` needs.
+  - plugin: obsidian
+    allow: [filesystem.read, filesystem.write]
+    deny: []
+  - plugin: calendar
+    allow: [filesystem.read, filesystem.write]
+    deny: []
+  - plugin: docker
+    allow: [terminal.run]
+    deny: []
+  - plugin: postgresql
+    allow: [terminal.run]
+    deny: []
+  - plugin: github
+    allow: [network.http]
+    deny: []
+  - plugin: email
+    allow: [email.send]
+    deny: []
+
+  # Every plugin, by default, may read (but not write) the filesystem —
+  # a wildcard rule, checked only after any exact-name rule above.
+  - plugin: "*"
+    allow:
+      - filesystem.read
+    deny: []

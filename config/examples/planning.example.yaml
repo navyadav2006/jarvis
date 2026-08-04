@@ -1,0 +1,18 @@
+# Example planning.yaml — a household that wants to review plans more
+# often (lower threshold) and is more cautious about automation.
+
+max_retries: 3
+
+preview_task_threshold: 2
+preview_risky_collaborators:
+  - automation_engineer
+  - qa_engineer
+preview_risky_keywords:
+  - delete
+  - remove
+  - overwrite
+  - purchase
+  - pay
+  - send
+  - install
+  - uninstall

@@ -1,0 +1,13 @@
+# Core runtime dependencies for Jarvis (Phase 1: architecture & scaffolding).
+# Voice (Whisper.cpp/Piper/OpenWakeWord), browser automation (Playwright),
+# desktop control (PyAutoGUI), and vector search (FAISS) are intentionally
+# excluded here — they will be added as dependencies in the phases that
+# introduce those features, to keep the dependency surface matched to
+# what is actually implemented.
+
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.8.0
+pydantic-settings[yaml]>=2.4.0
+python-dotenv>=1.0.1
+PyYAML>=6.0.2

@@ -1,0 +1,15 @@
+# Example vault.yaml with the Obsidian integration turned on.
+
+enabled: true
+
+vault_dir: vault
+daily_dir: Daily
+projects_dir: Projects
+conversations_dir: Conversations
+devlogs_dir: Devlogs
+versions_dir: .jarvis/versions
+
+# Capture almost every conversation as structured knowledge — this
+# household would rather have a note it later deletes than lose
+# context from a short exchange.
+min_turns_for_auto_capture: 1

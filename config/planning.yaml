@@ -1,0 +1,17 @@
+# The Planning Engine (core/planning/) is always real — pure local
+# logic with no external backend, so there's no `enabled` flag here to
+# gate (unlike voice/cowork/vault/execution, which wrap optional real
+# backends). See docs/architecture.md's Phase 17 section.
+
+max_retries: 2
+
+preview_task_threshold: 3
+preview_risky_collaborators:
+  - automation_engineer
+preview_risky_keywords:
+  - delete
+  - remove
+  - overwrite
+  - purchase
+  - pay
+  - send

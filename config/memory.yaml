@@ -1,0 +1,38 @@
+# Short-term memory (conversation history) is always active — see
+# orchestrator/session_store.py. Long-term memory is disabled by
+# default: main.bootstrap() only constructs the real SqliteMemoryManager
+# (core/memory/store.py, Phase 12) when long_term.enabled is true;
+# otherwise NullMemoryPort is used, same cautious-rollout pattern as
+# voice/cowork. `vector_index` is reserved for a future real FAISS
+# backend — not consumed yet. Semantic memory that IS real as of
+# Phase 14 lives under `semantic` below, and uses its own
+# dependency-free hashing embedding, not FAISS. See
+# config/examples/memory.example.yaml for a populated example.
+
+short_term:
+  max_turns: 50
+
+long_term:
+  enabled: false
+  database_path: data/memory/jarvis.db
+  vector_index:
+    backend: faiss
+    index_path: data/memory/index.faiss
+    embedding_dim: 384
+  recall_limit: 5
+
+# Semantic memory (Phase 14): vault indexing + hybrid keyword/semantic
+# search + Cowork context injection. Only takes effect when
+# long_term.enabled AND vault.yaml's `enabled` are also true — see
+# main.bootstrap() and docs/architecture.md's Phase 14 section.
+semantic:
+  enabled: false
+  embedding_dim: 256
+  cache_path: data/memory/embedding_cache.json
+  index_path: data/memory/semantic_index.json
+  # How much weight semantic similarity gets versus keyword/importance/
+  # recency when ranking hybrid search results. 0.0 = keyword-only,
+  # 1.0 = semantic-only.
+  semantic_weight: 0.4
+  # Max memories injected into a single Cowork request's context.
+  context_injection_limit: 5

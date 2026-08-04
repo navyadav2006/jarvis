@@ -1,0 +1,17 @@
+# Claude Cowork integration is disabled — no Cowork backend is wired
+# into main.py/the orchestrator yet (core/cowork/ is a reusable
+# module, not yet constructed in main.py — see docs/architecture.md's
+# Phase 9 section). The API key is never stored here: set the
+# environment variable named below instead.
+
+enabled: false
+
+base_url: https://api.anthropic.com/cowork
+endpoint_path: /v1/tasks
+api_key_env_var: COWORK_API_KEY
+
+timeout_seconds: 30.0
+max_retries: 2
+retry_backoff_seconds: 1.0
+
+min_confidence_for_local: 0.4

@@ -1,0 +1,76 @@
+# Voice is disabled — no voice plugin is wired into the running app
+# yet (core/speech/ and core/voice/ are reusable modules, not yet
+# constructed in main.py — see docs/architecture.md's Phase 5-8
+# sections). Model paths below won't exist until downloaded. See
+# config/examples/voice.example.yaml for a populated example.
+
+enabled: false
+
+# OpenWakeWordDetector tuning (core/speech/wake_word.py, Phase 8). Real
+# and used by OpenWakeWordDetector if one is constructed — same
+# not-yet-wired-into-main.py caveat as `streaming`/`queue` below.
+wake_word:
+  enabled: true
+  # Built-in openWakeWord model names, or filesystem paths to
+  # custom-trained .onnx/.tflite models — any number of either, scored
+  # simultaneously.
+  models:
+    - hey_jarvis
+  threshold: 0.5
+  # How much audio must be fed before the same wake word can fire
+  # again, to avoid a sustained utterance (or its speaker echo)
+  # re-triggering detection repeatedly.
+  cooldown_seconds: 2.0
+  inference_framework: onnx
+
+stt:
+  engine: whisper.cpp
+  model_path: data/models/whisper/ggml-base.en.bin
+  # "auto" enables whisper.cpp's own language detection instead.
+  language: en
+
+tts:
+  engine: piper
+  voice: en_US-lessac-medium
+  model_path: data/models/piper/en_US-lessac-medium.onnx
+  # 1.0 = Piper's natural speaking rate. Baked into synthesis (Piper's
+  # length_scale = 1.0/speed) — changing this requires re-synthesizing.
+  speed: 1.0
+  # 1.0 = unchanged. Applied at playback time by SpeechQueue, so this
+  # can be adjusted live via SpeechQueue.set_volume() with no
+  # resynthesis needed.
+  volume: 1.0
+
+# Listening behavior — schema only in Phase 5 (see
+# src/jarvis/core/voice/pipeline.py): no VoicePipeline implementation
+# reads this yet, since only the interfaces exist so far.
+listening:
+  mode: push_to_talk
+  background: false
+  conversation_mode: false
+  conversation_timeout_seconds: 8.0
+  allow_interruption: true
+
+# StreamingTranscriber tuning (core/speech/streaming.py, Phase 6).
+# Real and used by StreamingTranscriber if one is constructed —
+# unlike `listening` above, this isn't schema-only, though nothing in
+# main.py constructs a StreamingTranscriber yet either.
+streaming:
+  pause_duration_seconds: 0.8
+  max_utterance_seconds: 30.0
+  no_speech_timeout_seconds: 10.0
+  partial_interval_seconds: 1.5
+  inference_timeout_seconds: 15.0
+  vad_aggressiveness: 2
+
+# SpeechQueue tuning (core/speech/queue.py, Phase 7). Real and used by
+# SpeechQueue if one is constructed — nothing in main.py constructs
+# one yet, same caveat as `streaming` above.
+queue:
+  # Unlimited by default. Set a number to bound how many responses can
+  # be queued before enqueue() raises SpeechQueueFullError.
+  max_queue_size: null
+  # How often the queue's worker thread polls AudioPlayerPort.is_playing
+  # to detect that the current item finished. Lower = snappier
+  # skip()/interrupt() response, at the cost of more CPU wakeups.
+  poll_interval_seconds: 0.05

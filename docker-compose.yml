@@ -1,0 +1,49 @@
+# Runs the Jarvis API/orchestrator server. See docs/deployment.md for
+# the full runbook (what this does and doesn't cover, secrets, and how
+# to add an optional extra like the Cowork HTTP backend).
+
+services:
+  jarvis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Uncomment to build with an optional extra installed, e.g. to
+      # enable the real Cowork HTTP transport:
+      # args:
+      #   EXTRAS: cowork
+    image: jarvis:local
+    ports:
+      - "8756:8756"
+    environment:
+      APP__ENV: production
+      API__HOST: 0.0.0.0
+      API__PORT: 8756
+      # Secrets (e.g. COWORK_API_KEY, the env var permissions.yaml's
+      # cowork.yaml api_key_env_var names) belong in a local, git-ignored
+      # .env file passed via env_file below — never committed here.
+    env_file:
+      - .env
+    volumes:
+      # Runtime state that must survive a container restart/rebuild —
+      # SQLite databases (memory, workflows), the security/execution
+      # audit logs, external plugins, and the Obsidian vault.
+      - jarvis-data:/app/data
+      - jarvis-logs:/app/logs
+      - jarvis-plugins:/app/plugins
+      - jarvis-vault:/app/vault
+      # Edit config/*.yaml on the host and see it picked up live (see
+      # settings.yaml's config.live_reload) without rebuilding the image.
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8756/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  jarvis-data:
+  jarvis-logs:
+  jarvis-plugins:
+  jarvis-vault:

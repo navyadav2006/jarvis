@@ -1,0 +1,35 @@
+# Example memory.yaml with long-term memory AND semantic memory turned
+# on: main.bootstrap() will construct a real SqliteMemoryManager (Phase
+# 12) plus vault indexing/hybrid search/Cowork context injection
+# (Phase 14) — the latter also needs vault.yaml's `enabled: true`.
+# `vector_index` stays reserved/unused until a future phase implements
+# a real FAISS-backed EmbeddingIndexPort.
+
+short_term:
+  # How many conversation turns Session keeps in memory per session_id
+  # before the oldest are dropped. Higher = more context available to
+  # capability handlers, more RAM per active session.
+  max_turns: 100
+
+long_term:
+  enabled: true
+  database_path: data/memory/jarvis.db
+  vector_index:
+    backend: faiss
+    index_path: data/memory/index.faiss
+    # Must match the embedding model's output dimension once one is
+    # chosen — 384 is a common size for small sentence-embedding models.
+    embedding_dim: 384
+  # How many memory items MemoryPort.recall() returns per request.
+  recall_limit: 8
+
+semantic:
+  enabled: true
+  embedding_dim: 256
+  cache_path: data/memory/embedding_cache.json
+  index_path: data/memory/semantic_index.json
+  # A bit more semantic-leaning than the shipped default — this
+  # household asks Jarvis conceptual questions more than exact-keyword
+  # ones.
+  semantic_weight: 0.6
+  context_injection_limit: 8

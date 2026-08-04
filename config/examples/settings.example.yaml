@@ -1,0 +1,48 @@
+# Example settings.yaml showing every field, with a value different
+# from the shipped default so it's obvious what's being overridden.
+# Copy whatever sections you need into config/settings.yaml — you do
+# not need to copy the whole file; any field left out falls back to
+# its typed default (see src/jarvis/core/config/app_config.py).
+
+app:
+  name: Jarvis
+  # "production" turns off anything gated on a dev-only convenience
+  # (nothing does yet in Phase 3 — flagged here for when something does).
+  env: production
+  debug: false
+
+logging:
+  # DEBUG is noisy — useful while developing a new plugin, not for
+  # day-to-day use. This can be changed while Jarvis is running and
+  # takes effect live (see the `config` section below) without a restart.
+  level: DEBUG
+  format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  dir: logs
+  file_name: jarvis.log
+  # Rotate at 50MB instead of the 10MB default, keep more backups.
+  max_bytes: 50000000
+  backup_count: 10
+  console: true
+
+paths:
+  # Relative paths resolve from the project root; absolute paths (e.g.
+  # a dedicated data drive) work too.
+  data_dir: data
+  plugins_dir: plugins
+  vault_dir: /mnt/obsidian-vault
+  prompts_dir: prompts
+
+api:
+  # Bind to all interfaces instead of localhost-only — only do this on
+  # a trusted network; there is no authentication on the API (Phase 2/3
+  # both flag this as a known gap).
+  host: 0.0.0.0
+  port: 8756
+
+config:
+  # Turn this off in an environment where config files are managed
+  # externally (e.g. mounted read-only in a container) and you'd
+  # rather Jarvis not poll them at all.
+  live_reload: true
+  poll_interval_seconds: 1.0

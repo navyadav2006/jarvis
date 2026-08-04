@@ -1,0 +1,11 @@
+# Optional: only needed to actually run HttpCoworkTransport, the real
+# core/cowork/ HTTP backend. CoworkClient's retry/timeout/parsing logic
+# imports nothing here and is fully tested against a fake transport.
+#
+#   pip install -r requirements-cowork.txt
+#
+# equivalently: pip install -e ".[cowork]"
+
+-r requirements.txt
+
+httpx>=0.27.0

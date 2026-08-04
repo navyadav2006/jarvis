@@ -1,0 +1,9 @@
+# Example workflow.yaml — a deployment running several recurring
+# maintenance workflows that wants faster scheduler response and more
+# concurrent runs.
+
+database_path: data/workflows.db
+
+scheduler_poll_interval_seconds: 10.0
+
+max_concurrent_runs: 4

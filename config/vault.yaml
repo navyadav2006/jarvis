@@ -1,0 +1,17 @@
+# Obsidian vault integration is disabled — no VaultService is wired
+# into main.py yet unless enabled: true here (see docs/architecture.md's
+# Phase 13 section). `vault_dir` is already allowlisted by
+# filesystem.yaml's default `allowed_dirs`.
+
+enabled: false
+
+vault_dir: vault
+daily_dir: Daily
+projects_dir: Projects
+conversations_dir: Conversations
+devlogs_dir: Devlogs
+versions_dir: .jarvis/versions
+
+# A conversation needs at least this many turns before Jarvis
+# automatically writes a summary note for it.
+min_turns_for_auto_capture: 3

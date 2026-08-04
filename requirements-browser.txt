@@ -1,0 +1,13 @@
+# Optional: only needed for the real Browser Agent backend
+# (core/browser/playwright_browser.py). After installing this, you
+# ALSO need to run `playwright install <engine>` (e.g. `playwright
+# install chromium`) — pip alone cannot download the browser binaries.
+#
+#   pip install -r requirements-browser.txt
+#   playwright install chromium
+#
+# equivalently: pip install -e ".[browser]"
+
+-r requirements.txt
+
+playwright>=1.47.0

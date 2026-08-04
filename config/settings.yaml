@@ -1,0 +1,37 @@
+# Committed defaults for the general application settings. Safe for
+# every developer/machine — no secrets, no machine-specific paths.
+# Overridden by real environment variables / .env (FOO__BAR=value);
+# see .env.example. See src/jarvis/core/config/app_config.py for the
+# typed model this validates against.
+
+app:
+  name: Jarvis
+  env: development
+  debug: false
+
+logging:
+  level: INFO
+  format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  dir: logs
+  file_name: jarvis.log
+  max_bytes: 10000000
+  backup_count: 5
+  console: true
+
+paths:
+  data_dir: data
+  plugins_dir: plugins
+  vault_dir: vault
+  prompts_dir: prompts
+
+api:
+  host: 127.0.0.1
+  port: 8756
+
+# Controls ConfigManager's background file watcher (see main.bootstrap()).
+# With live_reload true, editing any config/*.yaml file while Jarvis is
+# running takes effect within poll_interval_seconds, with no restart.
+config:
+  live_reload: true
+  poll_interval_seconds: 2.0

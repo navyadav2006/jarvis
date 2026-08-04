@@ -1,0 +1,13 @@
+# The Autonomous Workflow engine (core/workflow/) is always real — pure
+# local logic plus its own SQLite store, so there's no `enabled` flag
+# here to gate (same reasoning as planning.yaml/security.yaml). See
+# docs/architecture.md's Phase 20 section.
+
+database_path: data/workflows.db
+
+# How often WorkflowScheduler checks whether any scheduled workflow is
+# due to run.
+scheduler_poll_interval_seconds: 30.0
+
+# WorkflowRunner's background worker pool size.
+max_concurrent_runs: 2

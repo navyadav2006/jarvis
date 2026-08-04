@@ -1,0 +1,77 @@
+# Example voice.yaml with the voice pipeline turned on, for once a
+# voice plugin (OpenWakeWord + Whisper.cpp + Piper TTS) exists to read
+# it. Model paths point at where the corresponding model file would
+# need to live under data/models/ — Jarvis does not download models
+# for you.
+
+enabled: true
+
+wake_word:
+  enabled: true
+  # Two wake words active at once: the built-in "hey_jarvis" plus a
+  # custom-trained household name. Custom entries are file paths;
+  # openWakeWord scores every configured model on every chunk.
+  models:
+    - hey_jarvis
+    - data/models/openwakeword/hey_computer.onnx
+  # Lower = more sensitive (more false wake-ups); higher = less
+  # sensitive (more missed wake-ups). 0.0-1.0.
+  threshold: 0.6
+  # A bit more patient than the shipped default — this household's
+  # open floor plan means echoes off hard surfaces could otherwise
+  # cause rapid re-triggers.
+  cooldown_seconds: 3.0
+  inference_framework: onnx
+
+stt:
+  engine: whisper.cpp
+  model_path: data/models/whisper/ggml-small.en.bin
+  # Detect the spoken language automatically instead of assuming
+  # English — useful for a multilingual household.
+  language: auto
+
+tts:
+  engine: piper
+  voice: en_US-lessac-medium
+  model_path: data/models/piper/en_US-lessac-medium.onnx
+  # Slightly faster than natural speech — this household prefers quick
+  # responses over a relaxed pace.
+  speed: 1.15
+  # A bit quieter than full volume by default; adjusted live per-room
+  # via SpeechQueue.set_volume() rather than baked in here.
+  volume: 0.8
+
+# "Always-on, hands-free conversation" setup: continuous listening
+# (no button needed), running in the background so it never blocks the
+# rest of the app, staying in conversation mode between turns so a
+# back-and-forth doesn't need to restart each time, with barge-in
+# enabled so talking over the assistant interrupts it.
+listening:
+  mode: continuous
+  background: true
+  conversation_mode: true
+  # How long to keep listening after the assistant finishes speaking
+  # before giving up on the conversation and returning to idle.
+  conversation_timeout_seconds: 12.0
+  allow_interruption: true
+
+# StreamingTranscriber tuning: a bit more patient than the shipped
+# defaults, for a household with background noise where cutting
+# people off mid-sentence would be annoying.
+streaming:
+  # Wait a little longer than the 0.8s default before treating silence
+  # as "the speaker is done" — reduces false cutoffs on natural pauses.
+  pause_duration_seconds: 1.2
+  max_utterance_seconds: 45.0
+  no_speech_timeout_seconds: 15.0
+  partial_interval_seconds: 1.0
+  inference_timeout_seconds: 20.0
+  # More aggressive noise rejection (0-3) — this household has a loud
+  # HVAC system in the background.
+  vad_aggressiveness: 3
+
+# SpeechQueue tuning: cap how many responses can pile up so a chatty
+# session can't queue an unbounded backlog of things to say.
+queue:
+  max_queue_size: 10
+  poll_interval_seconds: 0.05

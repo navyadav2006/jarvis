@@ -1,0 +1,19 @@
+# Example security.yaml — a household that's more cautious about
+# automation, with tighter rate limits and one more level requiring
+# confirmation.
+
+audit_log_path: logs/security_audit.jsonl
+
+rate_limits:
+  read_per_minute: 60
+  write_per_minute: 20
+  execute_per_minute: 10
+  dangerous_per_minute: 2
+  administrator_per_minute: 2
+
+confirmation_required_levels:
+  - execute
+  - dangerous
+  - administrator
+
+session_history_limit: 500

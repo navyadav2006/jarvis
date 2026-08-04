@@ -1,0 +1,11 @@
+# No plugin has any capability beyond what default_policy grants.
+# default_policy: deny means every plugin is denied every scope unless
+# an explicit rule below allows it (deny-by-default).
+#
+# Not yet enforced anywhere in Phase 3 — see
+# src/jarvis/core/config/permissions_config.py and
+# docs/architecture.md's Phase 3 section. See
+# config/examples/permissions.example.yaml for a populated example.
+
+default_policy: deny
+rules: []

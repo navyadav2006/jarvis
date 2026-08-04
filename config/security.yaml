@@ -1,0 +1,25 @@
+# The Jarvis Security Manager (core/security/) — always active, no
+# enabled flag: it's pure local logic in front of ExecutionEngine, the
+# same "always real" choice as planning.yaml's PlanningEngine. See
+# docs/architecture.md's Phase 19 section.
+
+audit_log_path: logs/security_audit.jsonl
+
+rate_limits:
+  read_per_minute: 120
+  write_per_minute: 60
+  execute_per_minute: 30
+  dangerous_per_minute: 5
+  administrator_per_minute: 5
+
+# Which permission levels require an explicit confirmation
+# (core/security/confirmation.py's ConfirmationPort) before running.
+# No confirmation UI is wired into main.py yet, so these currently
+# fail closed (denied) via AutoDenyConfirmation.
+confirmation_required_levels:
+  - dangerous
+  - administrator
+
+# How many past decisions SessionHistory keeps per requester before
+# the oldest are dropped.
+session_history_limit: 200

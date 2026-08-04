@@ -1,0 +1,35 @@
+# Allowlist: only these directories (and their contents) are reachable
+# by the filesystem module. Relative paths resolve against the project
+# root, same as settings.yaml's `paths` section — these match
+# paths.data_dir / paths.vault_dir by default, so the assistant can
+# manage its own local-first storage out of the box. Anything not
+# listed here is denied, regardless of blacklisted_dirs below.
+allowed_dirs:
+  - data
+  - vault
+
+# Explicit denies, checked before the allowlist — wins even for a path
+# nested inside an allowed directory above. Empty by default; see
+# config/examples/filesystem.example.yaml for a populated example.
+blacklisted_dirs: []
+
+# Operations listed here raise ConfirmationRequiredError unless called
+# with confirmed=True. delete/move/rename are destructive by nature
+# (they remove or relocate something that existed); copy/read/write/
+# search are not, by default.
+require_confirmation:
+  - delete
+  - move
+  - rename
+
+# Reading a file larger than this raises rather than loading it fully
+# into memory.
+max_read_bytes: 10000000
+
+# search() stops collecting matches after this many, regardless of how
+# many the glob pattern actually matches.
+max_search_results: 1000
+
+# NOTE: Windows, Program Files, System32, and the on-disk registry hive
+# files are ALWAYS denied, unconditionally — this is not configurable
+# here or anywhere else. See src/jarvis/core/filesystem/path_guard.py.

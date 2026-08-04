@@ -1,0 +1,11 @@
+# No plugins exist yet (src/jarvis/plugins/ is an empty namespace
+# package). enabled/disabled are allow/deny lists by plugin name,
+# consumed directly by PluginLoader (see main.bootstrap()). The
+# per-plugin `plugins` map is for future per-plugin configuration
+# blobs — see src/jarvis/core/config/plugins_config.py and
+# config/examples/plugins.example.yaml for a populated example.
+
+autoload: true
+enabled: []
+disabled: []
+plugins: {}

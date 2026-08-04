@@ -1,0 +1,37 @@
+# Example filesystem.yaml showing a broader, more realistic allowlist
+# plus a blacklisted subfolder nested inside an allowed one —
+# demonstrating that blacklist always wins even when nested inside an
+# allowed directory (see PathGuard.check()'s precedence order:
+# protected system paths > blacklist > allowlist).
+
+allowed_dirs:
+  - data
+  - vault
+  # An absolute path works too — e.g. an Obsidian vault kept outside
+  # the project directory entirely.
+  - C:\Users\me\Documents\Notes
+
+blacklisted_dirs:
+  # Even though it's inside the allowed "vault" directory above,
+  # anything under vault/.private stays denied.
+  - vault/.private
+  # Credentials or secrets accidentally dropped in the notes folder
+  # stay denied too.
+  - C:\Users\me\Documents\Notes\secrets
+
+# Widen confirmation to cover overwriting-prone operations too, not
+# just the always-destructive ones (the default is just the three below).
+require_confirmation:
+  - delete
+  - move
+  - rename
+  - write
+  - copy
+
+# Smaller cap than the 10MB default — useful if this machine is memory
+# constrained and files are expected to be small (notes, configs).
+max_read_bytes: 2000000
+
+# Lower cap so a broad glob pattern (e.g. "**/*") can't return an
+# unbounded list.
+max_search_results: 200

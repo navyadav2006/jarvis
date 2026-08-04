@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis"
+version = "0.1.0"
+description = "Local-first, plugin-based AI desktop assistant"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "Proprietary" }
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings[yaml]>=2.4.0",
+    "python-dotenv>=1.0.1",
+    "PyYAML>=6.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.27.0",
+    "ruff>=0.6.0",
+    "mypy>=1.11.0",
+]
+# Real speech backends (core/speech/) — deliberately not in the base
+# `dependencies` list: they're large, platform-sensitive, compiled
+# packages that only matter once voice is actually enabled. The rest
+# of Jarvis runs fully without them (see core/speech/'s lazy imports).
+voice = [
+    "openwakeword>=0.6.0",
+    "pywhispercpp>=1.2.0",
+    "webrtcvad>=2.0.10",
+    "piper-tts>=1.2.0",
+    "numpy>=1.26.0",
+]
+# Real Cowork HTTP transport (core/cowork/http_transport.py) —
+# deliberately not in the base `dependencies` list: core/cowork/'s
+# retry/timeout/parsing logic (CoworkClient) has no dependency on it at
+# all and is fully tested against a fake transport.
+cowork = [
+    "httpx>=0.27.0",
+]
+# Real desktop automation/clipboard/screenshot/window backends
+# (core/execution/) — deliberately not in the base `dependencies` list:
+# filesystem/terminal/application handlers are dependency-free and work
+# without this; only desktop.click()/clipboard/screenshot/window need it.
+desktop = [
+    "pyautogui>=0.9.54",
+    "pyperclip>=1.9.0",
+    "Pillow>=10.4.0",
+    "pygetwindow>=0.0.9; sys_platform == 'win32'",
+]
+# The Browser Agent (core/browser/, Phase 16). `pip install -e '.[browser]'`
+# installs the Python package only — `playwright install <engine>`
+# (a separate binary download) is still required before real use.
+browser = [
+    "playwright>=1.47.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

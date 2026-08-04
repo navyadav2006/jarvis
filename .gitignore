@@ -1,0 +1,43 @@
+# Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Secrets / local config
+.env
+
+# Local-first data (never committed — user's private data lives here)
+data/*
+!data/.gitkeep
+logs/*
+!logs/.gitkeep
+vault/*
+!vault/.gitkeep
+
+# Plugins dropped in by the user at runtime (built-in plugins live in src/jarvis/plugins)
+plugins/*
+!plugins/.gitkeep
+!plugins/README.md
+
+# Vector indices / model weights
+*.faiss
+*.index
+*.bin
+*.onnx
+*.gguf
+
+# Test / tooling artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.egg-info/
+build/
+dist/
+
+# Editors
+.vscode/
+.idea/

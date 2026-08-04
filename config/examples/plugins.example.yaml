@@ -1,0 +1,41 @@
+# Example plugins.yaml showing all three ways to control plugin
+# loading, plus a populated per-plugin config blob.
+
+# If false, PluginLoader still discovers plugins but doesn't activate
+# any of them — useful for a future "plugin manager" UI that activates
+# plugins on demand instead of at startup.
+autoload: true
+
+# Allowlist mode: if non-empty, ONLY these plugin names load, no
+# matter what else is discovered. Leave empty (as in config/plugins.yaml)
+# to use denylist mode via `disabled` instead.
+enabled: []
+
+# Denylist mode (used when `enabled` is empty): every discovered
+# plugin loads EXCEPT these.
+disabled:
+  - experimental_browser_control
+
+# Per-plugin configuration, keyed by plugin name — read by each
+# plugin's configure() hook (Phase 18) before on_load() runs. See
+# src/jarvis/plugins/examples/ for the six reference plugins these
+# blobs correspond to (none of them auto-load by default; add the
+# module to `enabled` above, or copy it into your external plugins
+# directory, to activate one).
+plugins:
+  email:
+    enabled: true
+    config:
+      smtp_host: smtp.example.com
+      smtp_port: 587
+      username: jarvis@example.com
+      password_env_var: SMTP_PASSWORD  # the plugin itself only reads `password`; resolve this env var before writing it here
+  github:
+    enabled: true
+    config:
+      repo: your-org/your-repo
+      token_env_var: GITHUB_TOKEN
+  postgresql:
+    enabled: false
+    config:
+      connection_string: "postgresql://user@localhost:5432/mydb"
