@@ -3,7 +3,7 @@
 # Phase 13 section). `vault_dir` is already allowlisted by
 # filesystem.yaml's default `allowed_dirs`.
 
-enabled: false
+enabled: true
 
 vault_dir: vault
 daily_dir: Daily

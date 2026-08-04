@@ -37,6 +37,7 @@ htmlcov/
 *.egg-info/
 build/
 dist/
+/jarvis.exe
 
 # Editors
 .vscode/

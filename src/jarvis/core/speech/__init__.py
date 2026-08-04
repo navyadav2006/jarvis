@@ -7,12 +7,12 @@ as a live pipeline.
 Deliberately its own package, not folded into core/voice/: everything
 here operates purely on AudioChunk streams (core/voice/types.py) and
 the SpeechToTextPort/VoiceActivityDetector/TextToSpeechPort/
-AudioPlayerPort Protocols (core/voice/ports.py) from Phase 5 — it has
-no dependency on a MicrophonePort, a VoicePipeline, or main.py, which
-is what makes it "reusable" rather than tied to one pipeline. Nothing
-in main.py or the orchestrator references this package yet; see
+AudioPlayerPort Protocols (core/voice/ports.py) from Phase 5. As of the
+voice-wiring phase, main.py constructs a real JarvisVoicePipeline
+(behind voice.yaml's `enabled` flag) from these backends plus
+SoundDeviceMicrophone/SoundDeviceAudioPlayer — see
 docs/architecture.md's Phase 6 (STT) and Phase 7 (TTS) sections for
-what's deliberately deferred.
+history, and the voice-wiring section for how it's actually assembled.
 
 Every optional third-party dependency (openwakeword, pywhispercpp,
 webrtcvad, piper-tts, numpy) is imported lazily, inside the method that
@@ -35,6 +35,7 @@ from jarvis.core.speech.audio import (
 from jarvis.core.speech.jarvis_pipeline import JarvisVoicePipeline
 from jarvis.core.speech.piper_tts import PiperTextToSpeech
 from jarvis.core.speech.queue import SpeechQueue
+from jarvis.core.speech.sounddevice_io import SoundDeviceAudioPlayer, SoundDeviceMicrophone
 from jarvis.core.speech.streaming import StreamingTranscriber
 from jarvis.core.speech.vad import WebRtcVoiceActivityDetector
 from jarvis.core.speech.wake_word import OpenWakeWordDetector
@@ -48,6 +49,8 @@ __all__ = [
     "JarvisVoicePipeline",
     "OpenWakeWordDetector",
     "PiperTextToSpeech",
+    "SoundDeviceAudioPlayer",
+    "SoundDeviceMicrophone",
     "SpeechQueue",
     "StreamingTranscriber",
     "WebRtcVoiceActivityDetector",

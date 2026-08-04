@@ -8,4 +8,28 @@
 # config/examples/permissions.example.yaml for a populated example.
 
 default_policy: deny
-rules: []
+rules:
+  # Cowork (Claude, via core/execution/'s ExecutionEngineAdapter, gated
+  # by SecurityManager before every action — see security.yaml) is
+  # granted the automation scopes needed for "all capabilities work":
+  # filesystem read/write (still confined to filesystem.yaml's
+  # allowed_dirs — data/ and vault/ only), desktop mouse/keyboard,
+  # application launch/close, clipboard, screenshots, window control,
+  # and browser control. Terminal is deliberately NOT granted here —
+  # execution.yaml's terminal.allowed_commands is also empty, so
+  # terminal.run stays blocked at a second, independent layer even if
+  # this scope were added; populate both explicitly to enable it.
+  - plugin: cowork
+    allow:
+      - filesystem.read
+      - filesystem.write
+      - automation.mouse
+      - automation.keyboard
+      - application.launch
+      - application.close
+      - clipboard.read
+      - clipboard.write
+      - screenshot.capture
+      - window.read
+      - window.write
+      - browser.control

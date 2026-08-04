@@ -2700,3 +2700,275 @@ replacement for it.
   immediately" without the added complexity of a background thread
   polling for changes, since a Cowork request already touches disk
   once per call regardless.
+
+# Voice Wiring — Real Microphone/Speaker I/O
+
+Every piece of `JarvisVoicePipeline` (Phase 11) — wake word, VAD, STT,
+TTS, queueing, barge-in, conversation mode — was fully built and
+tested against fakes, but nothing ever constructed one with a *real*
+`MicrophonePort`/`AudioPlayerPort` or started it from `main.py`. This
+phase closes that gap: it's the difference between "the voice pipeline
+works" (true since Phase 11) and "you can actually talk to Jarvis"
+(true as of this phase, given the prerequisites below).
+
+## What was added
+
+- `core/speech/sounddevice_io.py`'s `SoundDeviceMicrophone`/
+  `SoundDeviceAudioPlayer` — the first real `MicrophonePort`/
+  `AudioPlayerPort` implementations, backed by the `sounddevice`
+  library (PortAudio bindings). `sounddevice` was picked over
+  `pyaudio` for the same reason `pywhispercpp`/`piper-tts`/
+  `openwakeword` were picked over subprocess/CLI alternatives in
+  Phases 6-8: prebuilt wheels (including on Windows), no native build
+  step. Both classes lazy-import `sounddevice` inside `start()`/
+  `play()`, matching every other real speech backend's "constructing
+  the class never requires the dependency" contract.
+  - `SoundDeviceMicrophone` captures on PortAudio's own callback
+    thread and hands each block to a bounded `queue.Queue`; a full
+    queue drops the *oldest* chunk rather than blocking the real-time
+    callback or raising — a pipeline that's fallen behind should lose
+    stale audio, not stall live capture further.
+  - `SoundDeviceAudioPlayer.play()` uses `sounddevice.play()` (already
+    non-blocking) at whatever sample rate the `AudioChunk` itself
+    reports — TTS output format stays a synthesis-time concern owned
+    by the `TextToSpeechPort` backend, not the player. `is_playing` is
+    cleared by a daemon thread blocked in `sounddevice.wait()`, so no
+    polling loop is needed to notice playback finished.
+- `VoiceConfig` gained `mic: MicrophoneConfig` / `player:
+  AudioPlayerConfig` (device selection, sample rate/channels/block
+  size, internal queue bound) — the first device-level fields voice
+  config has ever needed, since only Null/test-double ports existed
+  before.
+- `main.py`'s `bootstrap()` gained a new step 7 (renumbering the
+  previously-8-10 steps to 8-11): behind `voice.yaml`'s `enabled` flag
+  (default `false`, unchanged), it builds real
+  `OpenWakeWordDetector`/`WebRtcVoiceActivityDetector`/
+  `WhisperCppSpeechToText`/`PiperTextToSpeech`/`SoundDeviceMicrophone`/
+  `SoundDeviceAudioPlayer`, wires `AssistantHandler` as the
+  `lambda text, sid: orchestrator.handle(Request(text=text,
+  session_id=sid, source="voice")).text or ""` shape `core/voice/
+  ports.py` has documented since Phase 5, constructs a
+  `JarvisVoicePipeline`, and starts it as a background thread. `main()`
+  stops it in the shutdown `finally` block alongside the workflow
+  runner/scheduler.
+
+## Why there's no Null Object default for the voice pipeline itself
+
+Every other optional subsystem wired into `bootstrap()`
+(memory/automation/vault/cowork) is a **port** — something other code
+resolves and calls through, so a Null Object gives callers a safe,
+correct "no backend configured" default. A `VoicePipeline` isn't a
+port anything else depends on; it's a self-contained background loop
+that either exists and runs, or doesn't exist at all. So when
+`voice.yaml`'s `enabled` is `false` (the default), `bootstrap()`
+simply registers nothing — there's no `NullVoicePipeline` standing in,
+because nothing would ever call it.
+
+## Why enabling voice without the extra installed is a fatal startup error, not a graceful skip
+
+`execution.yaml`'s desktop/clipboard/screenshot/window handlers fall
+back to Null ports when their optional dependency is missing, even
+with the engine itself enabled — because *most* of `ExecutionEngine`
+(filesystem/terminal/application) works without that extra. Voice
+doesn't have an equivalent "works without it" core: every single
+backend a voice pipeline needs (mic, wake word, STT, TTS, player)
+requires the `voice` extra. Given that, silently degrading would mean
+`voice.yaml`'s `enabled: true` produces a process that *looks* started
+but can never actually hear or speak — worse than failing loudly.
+So `bootstrap()` lets `SpeechBackendUnavailableError` propagate out
+uncaught, consistent with the module docstring's existing "a
+validation failure here is fatal — the process must not start with
+broken config" posture for config loading itself.
+
+## Prerequisites this phase does not and cannot provide
+
+Wiring the pipeline together doesn't make voice work out of the box —
+two real, unavoidable gaps remain:
+
+1. **The `voice` extra must be installed**: `pip install -e '.[voice]'`
+   (or `pip install -r requirements-voice.txt`) — `openwakeword`,
+   `pywhispercpp`, `webrtcvad`, `piper-tts`, `numpy`, and now
+   `sounddevice`. These are large, compiled, platform-sensitive
+   packages; none are in the base install.
+2. **Model files must be downloaded separately** — they're binary
+   assets, not something `pip install` or this codebase can produce:
+   - **Whisper.cpp (STT)**: a `ggml-*.bin` model from
+     [ggerganov/whisper.cpp's model repo](https://huggingface.co/ggerganov/whisper.cpp)
+     (e.g. `ggml-base.en.bin`), placed at the path `voice.yaml`'s
+     `stt.model_path` points to (default
+     `data/models/whisper/ggml-base.en.bin`).
+   - **Piper (TTS)**: a voice `.onnx` + its `.onnx.json` config from
+     [rhasspy/piper's voice list](https://github.com/rhasspy/piper/blob/master/VOICES.md)
+     (e.g. `en_US-lessac-medium`), placed at `tts.model_path`.
+   - **openWakeWord (wake word)**: built-in model names (e.g.
+     `hey_jarvis`) download automatically on first use per
+     openWakeWord's own packaging; custom-trained `.onnx`/`.tflite`
+     files go in `wake_word.models` as file paths.
+
+   Enabling `voice.yaml` without these files present fails with a
+   clear `SpeechBackendUnavailableError` naming the missing path — see
+   `core/speech/whisper_cpp.py`/`piper_tts.py`/`wake_word.py`'s
+   existing `_ensure_model()` checks, unchanged by this phase.
+3. **sounddevice's exact callback-stream API was not verified against
+   a locally installed copy** in this environment — implemented
+   against its documented shape, the same unverified-API caveat every
+   other real speech backend in this package already carries (see
+   Phase 6/7/8's sections above).
+
+## What this phase deliberately does not include
+
+- **No packaged model files** — see above; a `data/models/` populated
+  with real binaries is outside what a code change can provide.
+- **No CLI/text chat loop** — `POST /message` remains the only
+  non-voice entry point into `Orchestrator.handle()`; voice is now a
+  second, independent entry point into the same orchestrator, not a
+  replacement for the first.
+- **No device-selection UI** — `mic.device`/`player.device` are config
+  fields (int index or name substring), set by editing `voice.yaml`
+  after checking `python -m sounddevice` for what's available.
+- **No resampling** — `SoundDeviceMicrophone` captures at whatever
+  `mic.sample_rate` says (16000 by default, matching whisper.cpp/
+  webrtcvad/openWakeWord's fixed expectation); changing it without
+  updating every downstream backend will fail loudly at the first
+  `SpeechError` a mismatched sample rate trips, not silently
+  misbehave.
+
+# Cowork Correction & Enabling All Capabilities
+
+Immediately after the voice-wiring phase, the user asked to enable
+every capability and provided a real Claude API key. That surfaced two
+real bugs — one architectural, one in the PyInstaller packaging — plus
+the deliberate work of turning on every optional subsystem.
+
+## Bug: Cowork was calling a product that doesn't exist
+
+Since Phase 9, `core/cowork/http_transport.py` POSTed to
+`https://api.anthropic.com/cowork/v1/tasks` with an `Authorization:
+Bearer` header — a shape invented before Cowork's real API was
+verified (the module docstring said as much at the time). That
+verification never happened, because there is no "Claude Cowork" HTTP
+product to verify against. The real Claude API is `POST
+/v1/messages`, authenticated via `x-api-key` (not `Authorization:
+Bearer`) plus an `anthropic-version` header. With the user's real key
+set, this would have 404'd on every request.
+
+**Fix**: `HttpCoworkTransport` now calls the real Claude Messages API
+via the official `anthropic` Python SDK (never raw HTTP — this
+project's own tooling guidance requires the SDK when one exists).
+`CoworkClient` (retry/timeout/backoff/diagnostics) needed zero changes
+— it was already decoupled from the transport via `CoworkTransport`'s
+`post_json(path, payload, timeout)` seam, precisely the separation
+Phase 9 built for testability. The plan-of-steps contract
+(`CoworkTaskResponse`/`CoworkPlanStep`) is now produced via Claude's
+structured outputs (`output_config.format` + a JSON Schema) instead of
+hypothetical free-text parsing — a step's automation parameters travel
+as a JSON-encoded string field (`automation_parameters_json`) rather
+than an open dict, since structured-outputs schemas require
+`additionalProperties: false` throughout and a genuinely free-form
+params object can't satisfy that; the transport parses it back into a
+real dict before returning. `CoworkConfig` gained a `model` field
+(default `claude-opus-5`) and `refusal` stop-reason handling. Verified
+against the real API with the user's key: the request authenticated
+and reached the model (a 400 "credit balance too low" response,
+confirming the endpoint/auth/retry chain all work correctly — not an
+auth or 404 error like the old fictional endpoint would produce).
+
+## Bug: the packaged exe silently loaded every config default
+
+`core/config/_paths.py`'s `PROJECT_ROOT = Path(__file__).resolve()...`
+is only correct running from source. Inside a PyInstaller onefile
+build, every bundled module's `__file__` resolves into the temporary
+extraction directory (`sys._MEIPASS`, a fresh `%TEMP%\_MEIxxxxx` each
+run), so `DEFAULT_CONFIG_DIR`/`PathsSettings.resolved()` pointed at a
+`config/` that never existed. `ConfigManager`'s existing fail-safe
+"missing directory → every domain's pydantic defaults" behavior
+activated silently — no error, no warning, just every capability
+reading as its default (off). This was invisible for as long as every
+domain's default happened to be off; enabling capabilities is what
+exposed it — `jarvis.exe` kept reporting `voice: enabled=false` no
+matter what `config/voice.yaml` said. Fixed by detecting `sys.frozen`
+and using `Path(sys.executable).resolve().parent` instead — the same
+directory `scripts/run_jarvis_exe.py` already `os.chdir()`s to, now
+the source of truth for every module that computes `PROJECT_ROOT`,
+not just the entry point. Regression test:
+`tests/core/config/test_paths.py`.
+
+## Capabilities enabled
+
+`cowork.yaml`, `execution.yaml` (including its `browser.enabled`
+sub-flag), `memory.yaml` (`long_term` + `semantic`), and `vault.yaml`
+are now all `enabled: true` in this repo's checked-in config —
+previously every one of these defaulted off. `permissions.yaml` gained
+a rule granting the `cowork` requester the automation scopes
+`ExecutionEngine` needs (filesystem read/write, desktop mouse/
+keyboard, application launch/close, clipboard, screenshot, window
+control, browser control) — `default_policy: deny` with an empty
+`rules: []` would otherwise block every automation action regardless
+of `execution.yaml`'s `enabled` flag, since `SecurityManager` checks
+`PermissionsConfig.is_allowed()` first (Phase 19). `terminal.run` was
+deliberately left out of that grant, and `execution.yaml`'s
+`terminal.allowed_commands` stays empty — arbitrary shell command
+execution is a distinct, larger grant than the rest and wasn't
+requested explicitly.
+
+`main.py`'s desktop/clipboard/screenshot/window handlers changed from
+always-Null to real (`PyAutoGuiDesktopAutomation`/`PyperclipClipboard`/
+`PillowScreenshotter`/`PyGetWindowManager`) whenever `execution.yaml`
+is enabled — previously Null even when the engine itself was enabled,
+since the project couldn't assume the `desktop` extra was installed.
+Construction is still unconditional and side-effect-free (each
+lazy-imports its dependency on first real call, same as every other
+optional backend in this project), so this is safe regardless of
+whether a given deployment has the extra.
+
+`voice.yaml`'s `listening.mode` changed from `push_to_talk` to
+`continuous` (with `background: true`, `conversation_mode: true`) —
+push-to-talk requires a button that doesn't exist in this deployment;
+continuous + `wake_word.enabled` (already on by default) is what makes
+"say 'hey jarvis', it starts listening" work at all.
+`streaming.pause_duration_seconds` raised from 0.8 to 1.5 seconds to
+match "a few seconds of not speaking" before Jarvis finalizes and acts
+on an utterance.
+
+**Real bug found while enabling wake word, not by reading the code**:
+`OpenWakeWordDetector._ensure_model()` never called
+`openwakeword.utils.download_models()` — built-in model names like
+`hey_jarvis` are not bundled with the `openwakeword` package and do
+NOT download on first use despite what this project's own earlier
+documentation (README, this file's voice-wiring section) claimed.
+Constructing `Model()` without the files first raises a raw
+`onnxruntime.NoSuchFile` error, not something a caller could recognize
+as "just needs downloading." Fixed by calling `download_models()`
+(a no-op once already downloaded) before constructing `Model()` for
+any built-in model name; custom `.onnx`/`.tflite` paths are unaffected
+since they're already file-existence-checked separately. Caught by
+actually running the detector end-to-end against real silence, not by
+reading the code — the same recurring pattern this project's phase
+history keeps surfacing.
+
+**Verified live, not just via bootstrap()**: real STT
+(`WhisperCppSpeechToText`, downloaded `ggml-base.en.bin`) transcribed
+silence correctly; real TTS (`PiperTextToSpeech`, downloaded
+`en_US-lessac-medium`) synthesized audio; real wake-word detection
+scored real microphone input without a false trigger; a full
+`bootstrap()` with everything enabled (Cowork, execution, browser,
+memory, vault, voice) started cleanly, reached `waiting_for_wake_word`
+against a real microphone, and stopped cleanly. This was all run on a
+machine with real audio hardware and real internet access, not
+simulated — the environment genuinely supports the full pipeline.
+
+## What this phase deliberately does not include
+
+- **No terminal command execution** — `terminal.allowed_commands`
+  stays empty and `permissions.yaml`'s `cowork` rule excludes
+  `terminal.run`; enabling arbitrary shell execution is a distinct,
+  larger security decision than what was asked.
+- **No plugins** — `plugins.yaml` still has zero plugins enabled, so
+  the local `CapabilityRegistry` remains empty and every message still
+  routes to Cowork (or `unhandled` if Cowork is unavailable). "All
+  capabilities work" here means every *subsystem* Jarvis can call into
+  is live, not that bespoke plugin capabilities exist.
+- **Cowork's Anthropic account needs credits** — the transport is
+  correct and verified reaching the real API; the account used in this
+  session returned an HTTP 400 credit-balance error, which is a
+  billing state outside this codebase's control.

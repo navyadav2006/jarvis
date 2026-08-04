@@ -1,9 +1,10 @@
 # Optional: only needed to actually run the speech module's real
 # backends (OpenWakeWordDetector, WhisperCppSpeechToText,
-# WebRtcVoiceActivityDetector, PiperTextToSpeech). Everything in
-# core/speech/ imports these lazily, so the rest of Jarvis — including
-# all of StreamingTranscriber's and SpeechQueue's own coordination
-# logic, tested against fakes — works without this file installed.
+# WebRtcVoiceActivityDetector, PiperTextToSpeech, SoundDeviceMicrophone/
+# SoundDeviceAudioPlayer). Everything in core/speech/ imports these
+# lazily, so the rest of Jarvis — including all of StreamingTranscriber's
+# and SpeechQueue's own coordination logic, tested against fakes — works
+# without this file installed.
 #
 #   pip install -r requirements-voice.txt
 #
@@ -16,3 +17,4 @@ pywhispercpp>=1.2.0
 webrtcvad>=2.0.10
 piper-tts>=1.2.0
 numpy>=1.26.0
+sounddevice>=0.4.6

@@ -1,12 +1,15 @@
-# Example cowork.yaml with the integration turned on, for once a
-# concrete CoworkClientPort (HttpCoworkTransport) is actually wired
-# into main.py. Set COWORK_API_KEY in the environment before enabling
-# — it is never read from this file.
+# Example cowork.yaml with the integration turned on. Set COWORK_API_KEY
+# in the environment before enabling — it is never read from this file.
 
 enabled: true
 
-base_url: https://api.anthropic.com/cowork
-endpoint_path: /v1/tasks
+# This household prefers Sonnet for Cowork requests — cheaper, still
+# supports structured outputs, and most household commands don't need
+# Opus-tier reasoning.
+model: claude-sonnet-5
+
+base_url: https://api.anthropic.com
+endpoint_path: /v1/messages
 api_key_env_var: COWORK_API_KEY
 
 # A bit more patient than the shipped default, and one extra retry —

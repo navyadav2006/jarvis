@@ -9,7 +9,7 @@ class — every requirement of this phase except the actual network call
 — is fully testable against a fake transport with zero real HTTP calls
 and zero real sleeping (the backoff sleep function is injectable too).
 `HttpCoworkTransport` (http_transport.py) is the one real implementation,
-and the only place `httpx` is imported.
+and the only place `anthropic` is imported.
 """
 
 from __future__ import annotations

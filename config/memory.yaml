@@ -13,7 +13,7 @@ short_term:
   max_turns: 50
 
 long_term:
-  enabled: false
+  enabled: true
   database_path: data/memory/jarvis.db
   vector_index:
     backend: faiss
@@ -26,7 +26,7 @@ long_term:
 # long_term.enabled AND vault.yaml's `enabled` are also true — see
 # main.bootstrap() and docs/architecture.md's Phase 14 section.
 semantic:
-  enabled: false
+  enabled: true
   embedding_dim: 256
   cache_path: data/memory/embedding_cache.json
   index_path: data/memory/semantic_index.json

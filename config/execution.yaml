@@ -4,7 +4,7 @@
 # (default: "cowork") may use which action category is governed by
 # permissions.yaml, not this file — see PermissionsConfig.
 
-enabled: false
+enabled: true
 
 audit_log_path: logs/execution_audit.jsonl
 
@@ -18,7 +18,7 @@ terminal:
 # needs the 'browser' extra AND a `playwright install <engine>` binary
 # download, so it can stay off even when the rest of the engine is on.
 browser:
-  enabled: false
+  enabled: true
   engine: chromium
   headless: true
   download_dir: data/browser/downloads

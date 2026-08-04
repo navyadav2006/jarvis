@@ -43,15 +43,32 @@ This is the one place that wires everything together, in a fixed order:
     6. Construct the Orchestrator itself from those collaborators and
        register it, so the API layer (or a future CLI/voice loop) can
        resolve it without knowing how it was assembled.
-    7. Create and run the PluginLoader, activating discovered plugins,
+    7. If voice.yaml's `enabled` is true, construct a real
+       JarvisVoicePipeline (Phase 11's implementation, unwired until
+       now) from real backends — SoundDeviceMicrophone/
+       SoundDeviceAudioPlayer for mic/speaker I/O, OpenWakeWordDetector
+       (or NullWakeWordPort if wake_word.enabled is false),
+       WebRtcVoiceActivityDetector, WhisperCppSpeechToText,
+       PiperTextToSpeech — and start it as a background thread.
+       Its AssistantHandler is a lambda over the Orchestrator built in
+       step 6, the exact shape core/voice/ports.py has documented
+       since Phase 5. Unlike every other collaborator above, there is
+       no Null Object default here: nothing else in the app depends on
+       a VoicePipeline, so a disabled/unconfigured deployment simply
+       has none registered rather than a real port standing in for
+       "no backend." Voice's optional dependencies (the 'voice'
+       extra) and downloaded model files (whisper.cpp/Piper/
+       openWakeWord) are still required for this to actually produce
+       audio — see docs/architecture.md's voice-wiring section.
+    8. Create and run the PluginLoader, activating discovered plugins,
        using plugins.yaml's autoload/enabled/disabled.
-    8. Start ConfigManager's background file watcher if settings.yaml's
+    9. Start ConfigManager's background file watcher if settings.yaml's
        config.live_reload is true.
-    9. Build the FastAPI app from the now-populated container.
-    10. Serve it with uvicorn.
+    10. Build the FastAPI app from the now-populated container.
+    11. Serve it with uvicorn.
 
 Every other module in the app should be reachable *from* this sequence
-(directly or via a plugin loaded in step 7) — nothing should be doing
+(directly or via a plugin loaded in step 8) — nothing should be doing
 its own ad hoc "read settings / configure logging" on import, because
 that would make startup order implicit instead of explicit. This is
 also the only module that is allowed to know every concrete type in
@@ -78,11 +95,11 @@ from jarvis.core.cowork.workspace import CoworkWorkspace
 from jarvis.core.events import EventBus
 from jarvis.core.execution import (
     ExecutionEngine,
-    NullClipboardPort,
-    NullDesktopAutomationPort,
-    NullScreenshotPort,
-    NullWindowPort,
+    PillowScreenshotter,
     ProcessApplicationManager,
+    PyAutoGuiDesktopAutomation,
+    PyGetWindowManager,
+    PyperclipClipboard,
     SubprocessTerminal,
 )
 from jarvis.core.filesystem import FilesystemPort, LocalFilesystemService
@@ -97,7 +114,17 @@ from jarvis.core.memory import (
 from jarvis.core.planning import PlanningEngine
 from jarvis.core.plugin_loader import PluginLoader
 from jarvis.core.security import AutoDenyConfirmation, SecurityManager
+from jarvis.core.speech import (
+    JarvisVoicePipeline,
+    OpenWakeWordDetector,
+    PiperTextToSpeech,
+    SoundDeviceAudioPlayer,
+    SoundDeviceMicrophone,
+    WebRtcVoiceActivityDetector,
+    WhisperCppSpeechToText,
+)
 from jarvis.core.vault import NullVaultPort, VaultPort, VaultService
+from jarvis.core.voice.ports import NullWakeWordPort, WakeWordPort
 from jarvis.core.workflow import (
     SqliteWorkflowStore,
     WorkflowEngine,
@@ -108,6 +135,7 @@ from jarvis.orchestrator.capability_registry import CapabilityRegistry
 from jarvis.orchestrator.execution_adapter import ExecutionEngineAdapter
 from jarvis.orchestrator.intent_recognizer import PatternIntentRecognizer
 from jarvis.orchestrator.memory_adapter import MemoryManagerAdapter
+from jarvis.orchestrator.models import Request as OrchestratorRequest
 from jarvis.orchestrator.orchestrator import Orchestrator
 from jarvis.orchestrator.ports import (
     AutomationPort,
@@ -174,14 +202,18 @@ def bootstrap() -> ServiceContainer:
 
     # Automation stays a Null Object unless explicitly enabled in
     # execution.yaml — see docs/architecture.md's Phase 15 section.
-    # Desktop/clipboard/screenshot/window handlers are Null too even
-    # when the engine itself is enabled: they need the optional
-    # 'desktop' extra, which real hardware access requires and this
-    # deployment may not have installed. filesystem/terminal/
-    # application are real and dependency-free. The browser category
-    # (Phase 16) has its own independent enable flag,
-    # execution.yaml's `browser.enabled`, since it needs the separate
-    # 'browser' extra plus a `playwright install` binary download.
+    # Desktop/clipboard/screenshot/window handlers are real
+    # (PyAutoGuiDesktopAutomation/PyperclipClipboard/
+    # PillowScreenshotter/PyGetWindowManager) whenever the engine
+    # itself is enabled — each lazy-imports its optional dependency
+    # (the 'desktop' extra) on first real call, so construction here
+    # never requires it installed; a deployment without the extra just
+    # gets a clear ExecutionBackendUnavailableError the first time one
+    # is actually used, same as every other lazy-import backend in
+    # this project. The browser category (Phase 16) has its own
+    # independent enable flag, execution.yaml's `browser.enabled`,
+    # since it needs the separate 'browser' extra plus a `playwright
+    # install` binary download.
     execution_config = config_manager.execution
 
     # SecurityManager (Phase 19) is pure local logic — always real, no
@@ -208,11 +240,11 @@ def bootstrap() -> ServiceContainer:
         engine = ExecutionEngine(
             filesystem=filesystem,
             terminal=SubprocessTerminal(execution_config.terminal),
-            desktop=NullDesktopAutomationPort(),
+            desktop=PyAutoGuiDesktopAutomation(),
             application=ProcessApplicationManager(),
-            clipboard=NullClipboardPort(),
-            screenshot=NullScreenshotPort(),
-            window=NullWindowPort(),
+            clipboard=PyperclipClipboard(),
+            screenshot=PillowScreenshotter(),
+            window=PyGetWindowManager(),
             browser=browser,
             permissions=config_manager.permissions,
             audit_log_path=execution_config.audit_log_path,
@@ -371,6 +403,43 @@ def bootstrap() -> ServiceContainer:
     )
     container.register_instance(Orchestrator, orchestrator)
 
+    # Voice pipeline (Phase 11's JarvisVoicePipeline, unwired until this
+    # phase) — see the docstring's step 7. No Null Object default: an
+    # unconfigured/disabled deployment simply has no VoicePipeline
+    # registered, since nothing else in the app calls into one.
+    voice_config = config_manager.voice
+    if voice_config.enabled:
+        wake_word: WakeWordPort = (
+            OpenWakeWordDetector(voice_config.wake_word)
+            if voice_config.wake_word.enabled
+            else NullWakeWordPort()
+        )
+
+        def _voice_assistant(text: str, session_id: str) -> str:
+            response = orchestrator.handle(
+                OrchestratorRequest(text=text, session_id=session_id, source="voice")
+            )
+            return response.text or ""
+
+        voice_pipeline = JarvisVoicePipeline(
+            microphone=SoundDeviceMicrophone(voice_config.mic),
+            wake_word=wake_word,
+            vad=WebRtcVoiceActivityDetector(
+                aggressiveness=voice_config.streaming.vad_aggressiveness
+            ),
+            stt=WhisperCppSpeechToText(voice_config.stt),
+            assistant=_voice_assistant,
+            tts=PiperTextToSpeech(voice_config.tts),
+            player=SoundDeviceAudioPlayer(voice_config.player),
+            config=voice_config,
+            events=events,
+        )
+        container.register_instance(JarvisVoicePipeline, voice_pipeline)
+        voice_pipeline.start()
+        logger.info("Voice pipeline started (mode=%s)", voice_config.listening.mode)
+    else:
+        logger.info("Voice disabled (voice.yaml enabled=false); no voice pipeline started")
+
     if plugins_config.autoload:
         plugin_loader.load_all()
     else:
@@ -406,6 +475,8 @@ def main() -> None:
         config_manager.stop_watching()
         workflow_scheduler.stop()
         workflow_runner.stop()
+        if container.has(JarvisVoicePipeline):
+            container.resolve(JarvisVoicePipeline).stop()
 
 
 if __name__ == "__main__":

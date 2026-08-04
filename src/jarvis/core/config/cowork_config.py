@@ -6,6 +6,19 @@ The API key itself is never stored in YAML — `api_key_env_var` names
 the environment variable HttpCoworkTransport reads it from at request
 time, keeping secrets out of version control without needing the
 config loader's env-override machinery (settings.yaml-only today).
+
+`base_url`/`endpoint_path` are vestigial as of the transport correction
+below — `HttpCoworkTransport` now calls the real Claude Messages API
+via the official `anthropic` SDK, which has its own fixed endpoint;
+kept here only because `CoworkClient` still passes `endpoint_path`
+into `CoworkTransport.post_json()` (unused by the real transport).
+
+CORRECTION: earlier revisions of this file described `base_url` as "a
+placeholder — Claude Cowork's real base URL is not published." That
+premise was wrong: there is no separate "Claude Cowork" HTTP product
+to look up a base URL for. Jarvis's Cowork collaborator now talks
+directly to the real Claude API (`POST /v1/messages`), configured via
+`model` below — see core/cowork/http_transport.py.
 """
 
 from __future__ import annotations
@@ -20,10 +33,15 @@ class CoworkConfig(BaseModel):
 
     enabled: bool = False
 
-    # Placeholder — Claude Cowork's real base URL is not published in
-    # this environment; update before enabling. See core/cowork/http_transport.py.
-    base_url: str = "https://api.anthropic.com/cowork"
-    endpoint_path: str = "/v1/tasks"
+    # The real Claude model Jarvis's Cowork collaborator talks to. See
+    # docs/architecture.md's voice-wiring/Cowork-correction section for
+    # why claude-opus-5 is the default (structured-outputs support,
+    # Anthropic's own current-model recommendation).
+    model: str = "claude-opus-5"
+
+    # Vestigial — see module docstring above.
+    base_url: str = "https://api.anthropic.com"
+    endpoint_path: str = "/v1/messages"
     api_key_env_var: str = "COWORK_API_KEY"
 
     # Per-attempt wall-clock timeout for one HTTP call.

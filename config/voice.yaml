@@ -4,7 +4,7 @@
 # sections). Model paths below won't exist until downloaded. See
 # config/examples/voice.example.yaml for a populated example.
 
-enabled: false
+enabled: true
 
 # OpenWakeWordDetector tuning (core/speech/wake_word.py, Phase 8). Real
 # and used by OpenWakeWordDetector if one is constructed — same
@@ -41,22 +41,24 @@ tts:
   # resynthesis needed.
   volume: 1.0
 
-# Listening behavior — schema only in Phase 5 (see
-# src/jarvis/core/voice/pipeline.py): no VoicePipeline implementation
-# reads this yet, since only the interfaces exist so far.
+# Listening behavior, read by JarvisVoicePipeline (core/speech/
+# jarvis_pipeline.py). continuous + wake_word.enabled (above, on by
+# default) is what makes "say 'hey jarvis', it starts listening" work
+# — push_to_talk would otherwise require a button that doesn't exist
+# here. conversation_mode keeps listening after a reply without
+# needing the wake word said again for a follow-up.
 listening:
-  mode: push_to_talk
-  background: false
-  conversation_mode: false
+  mode: continuous
+  background: true
+  conversation_mode: true
   conversation_timeout_seconds: 8.0
   allow_interruption: true
 
 # StreamingTranscriber tuning (core/speech/streaming.py, Phase 6).
-# Real and used by StreamingTranscriber if one is constructed —
-# unlike `listening` above, this isn't schema-only, though nothing in
-# main.py constructs a StreamingTranscriber yet either.
+# pause_duration_seconds is "how many seconds of not speaking before
+# Jarvis treats the utterance as finished and acts on it."
 streaming:
-  pause_duration_seconds: 0.8
+  pause_duration_seconds: 1.5
   max_utterance_seconds: 30.0
   no_speech_timeout_seconds: 10.0
   partial_interval_seconds: 1.5
@@ -74,3 +76,23 @@ queue:
   # to detect that the current item finished. Lower = snappier
   # skip()/interrupt() response, at the cost of more CPU wakeups.
   poll_interval_seconds: 0.05
+
+# SoundDeviceMicrophone tuning — the real MicrophonePort implementation
+# used when voice is wired into main.py (enabled: true above). device
+# null = system default input device; run `python -m sounddevice` to
+# list what's available. sample_rate/channels must stay 16000/1 unless
+# every downstream backend (whisper.cpp/webrtcvad/openWakeWord) is
+# also reconfigured, since nothing resamples.
+mic:
+  device: null
+  sample_rate: 16000
+  channels: 1
+  block_size: 320
+  queue_size: 50
+
+# SoundDeviceAudioPlayer tuning — the real AudioPlayerPort
+# implementation. Plays back at whatever sample rate each TTS-
+# synthesized AudioChunk itself reports, so there's no sample_rate
+# field here.
+player:
+  device: null

@@ -1,9 +1,9 @@
-"""The Cowork integration layer (Phase 9): Jarvis's client for Claude
-Cowork, its collaborative-reasoning engine.
+"""The Cowork integration layer (Phase 9): Jarvis's client for Claude,
+its collaborative-reasoning engine.
 
 Jarvis is a system-wide AI operating layer, not a single-agent
 assistant: local capability handlers answer what they can, and
-whatever they can't is offered to Cowork for planning. Cowork responds
+whatever they can't is offered to Claude for planning. Claude responds
 with a structured, inert plan (CoworkTaskResponse) — it has no access
 to any port capable of touching the filesystem, desktop, browser, or
 terminal. Only Jarvis's orchestrator, using the same AutomationPort/
@@ -17,12 +17,15 @@ imports orchestrator/, and CoworkTaskResponse/CoworkPlanStep
 phase's actual requirements — is fully unit-testable against a fake
 transport, with zero network dependency, the same pattern
 core/speech/'s StreamingTranscriber and SpeechQueue use for buffering
-logic versus real backends. `httpx` (HttpCoworkTransport's only
-dependency) is imported lazily, so `import jarvis.core.cowork` always
-succeeds.
+logic versus real backends. `anthropic` (HttpCoworkTransport's only
+dependency, calling the real Claude Messages API — see
+http_transport.py's module docstring for the earlier, incorrect
+"Claude Cowork" HTTP endpoint this replaced) is imported lazily, so
+`import jarvis.core.cowork` always succeeds.
 
-Not wired into `main.py` or the orchestrator — see
-docs/architecture.md's Phase 9 section for what's deliberately deferred.
+Wired into `main.py` behind `cowork.yaml`'s `enabled` flag — see
+docs/architecture.md's Phase 9 section for the original design and the
+voice-wiring/Cowork-correction section for what changed.
 """
 
 from __future__ import annotations

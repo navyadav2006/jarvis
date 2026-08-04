@@ -4,8 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from jarvis.core.config.voice_config import (
+    AudioPlayerConfig,
     ListeningConfig,
     ListeningMode,
+    MicrophoneConfig,
     SpeechQueueConfig,
     StreamingConfig,
     TextToSpeechConfig,
@@ -197,3 +199,68 @@ def test_queue_is_frozen() -> None:
     queue = SpeechQueueConfig()
     with pytest.raises(ValidationError):
         queue.max_queue_size = 5  # type: ignore[misc]
+
+
+def test_mic_defaults() -> None:
+    mic = VoiceConfig().mic
+    assert mic.device is None
+    assert mic.sample_rate == 16000
+    assert mic.channels == 1
+    assert mic.block_size == 320
+    assert mic.queue_size == 50
+
+
+def test_mic_accepts_int_or_str_device() -> None:
+    assert MicrophoneConfig(device=2).device == 2
+    assert MicrophoneConfig(device="USB Mic").device == "USB Mic"
+
+
+def test_mic_block_size_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        MicrophoneConfig(block_size=0)
+
+
+def test_mic_block_size_accepts_10_20_30ms_frames_at_16khz() -> None:
+    assert MicrophoneConfig(sample_rate=16000, block_size=160).block_size == 160  # 10ms
+    assert MicrophoneConfig(sample_rate=16000, block_size=320).block_size == 320  # 20ms
+    assert MicrophoneConfig(sample_rate=16000, block_size=480).block_size == 480  # 30ms
+
+
+def test_mic_block_size_rejects_non_vad_legal_frame_duration() -> None:
+    # This is the exact real-world bug: 1600 samples at 16kHz is a
+    # 100ms frame, which WebRtcVoiceActivityDetector rejects mid-
+    # conversation — now caught at config-construction time instead.
+    with pytest.raises(ValidationError, match="10, 20, or 30ms"):
+        MicrophoneConfig(sample_rate=16000, block_size=1600)
+
+
+def test_mic_block_size_scales_with_sample_rate() -> None:
+    assert MicrophoneConfig(sample_rate=32000, block_size=640).block_size == 640  # 20ms @ 32kHz
+    with pytest.raises(ValidationError):
+        MicrophoneConfig(sample_rate=32000, block_size=500)  # 15.625ms @ 32kHz — not legal
+
+
+def test_mic_queue_size_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        MicrophoneConfig(queue_size=0)
+
+
+def test_mic_is_frozen() -> None:
+    mic = MicrophoneConfig()
+    with pytest.raises(ValidationError):
+        mic.sample_rate = 8000  # type: ignore[misc]
+
+
+def test_player_device_defaults_to_none() -> None:
+    assert VoiceConfig().player.device is None
+
+
+def test_player_accepts_int_or_str_device() -> None:
+    assert AudioPlayerConfig(device=1).device == 1
+    assert AudioPlayerConfig(device="Speakers").device == "Speakers"
+
+
+def test_player_is_frozen() -> None:
+    player = AudioPlayerConfig()
+    with pytest.raises(ValidationError):
+        player.device = 3  # type: ignore[misc]

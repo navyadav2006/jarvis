@@ -110,12 +110,28 @@ class OpenWakeWordDetector:
                 "(pip install -e '.[voice]') to use OpenWakeWordDetector"
             ) from exc
 
+        built_in = [
+            entry for entry in self._config.models if not entry.endswith(_CUSTOM_MODEL_EXTENSIONS)
+        ]
         for entry in self._config.models:
             if entry.endswith(_CUSTOM_MODEL_EXTENSIONS) and not Path(entry).exists():
                 raise SpeechBackendUnavailableError(
                     f"custom wake word model file not found: {entry} "
                     "(update voice.yaml's wake_word.models with a valid path)"
                 )
+
+        if built_in:
+            # Built-in models (e.g. "hey_jarvis") are NOT bundled with the
+            # openwakeword package and do NOT download on first use despite
+            # what earlier documentation in this project claimed —
+            # openwakeword.Model() raises a raw onnxruntime FileNotFoundError
+            # if they're missing, not something a caller could recognize as
+            # "just needs downloading." download_models() is a no-op for
+            # already-downloaded models, so this is safe to call every time.
+            from openwakeword.utils import download_models
+
+            logger.info("Ensuring openWakeWord built-in model files are downloaded")
+            download_models()
 
         logger.info("Loading openWakeWord model(s): %s", self._config.models)
         self._model = Model(

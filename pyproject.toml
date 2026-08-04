@@ -37,13 +37,14 @@ voice = [
     "webrtcvad>=2.0.10",
     "piper-tts>=1.2.0",
     "numpy>=1.26.0",
+    "sounddevice>=0.4.6",
 ]
 # Real Cowork HTTP transport (core/cowork/http_transport.py) —
 # deliberately not in the base `dependencies` list: core/cowork/'s
 # retry/timeout/parsing logic (CoworkClient) has no dependency on it at
 # all and is fully tested against a fake transport.
 cowork = [
-    "httpx>=0.27.0",
+    "anthropic>=0.40.0",
 ]
 # Real desktop automation/clipboard/screenshot/window backends
 # (core/execution/) — deliberately not in the base `dependencies` list:

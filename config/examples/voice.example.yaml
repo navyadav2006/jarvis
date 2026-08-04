@@ -75,3 +75,16 @@ streaming:
 queue:
   max_queue_size: 10
   poll_interval_seconds: 0.05
+
+# This household picked device index 2 (a USB conference mic) instead
+# of the system default after checking `python -m sounddevice`.
+mic:
+  device: 2
+  sample_rate: 16000
+  channels: 1
+  block_size: 320
+  queue_size: 50
+
+# Playing back through the same USB device's output side.
+player:
+  device: 2

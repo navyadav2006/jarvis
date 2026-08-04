@@ -121,6 +121,43 @@ def test_reset_clears_cooldown_and_delegates_to_model() -> None:
     assert detector.process(make_chunk(0.1)) == "hey_jarvis"  # cooldown cleared by reset()
 
 
+def test_ensure_model_downloads_built_in_models_before_constructing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("openwakeword")
+    import openwakeword.model as model_module
+    import openwakeword.utils as utils_module
+
+    calls: list[str] = []
+    monkeypatch.setattr(utils_module, "download_models", lambda: calls.append("download"))
+    monkeypatch.setattr(model_module, "Model", lambda **kwargs: _FakeModel([]))
+
+    detector = OpenWakeWordDetector(WakeWordConfig(models=["hey_jarvis"]))
+    detector._ensure_model()
+
+    assert calls == ["download"]  # must happen before Model() is constructed
+
+
+def test_ensure_model_skips_download_for_custom_model_paths(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pytest.importorskip("openwakeword")
+    import openwakeword.model as model_module
+    import openwakeword.utils as utils_module
+
+    custom_path = f"{tmp_path}/custom.onnx"
+    open(custom_path, "wb").close()
+
+    calls: list[str] = []
+    monkeypatch.setattr(utils_module, "download_models", lambda: calls.append("download"))
+    monkeypatch.setattr(model_module, "Model", lambda **kwargs: _FakeModel([]))
+
+    detector = OpenWakeWordDetector(WakeWordConfig(models=[custom_path]))
+    detector._ensure_model()
+
+    assert calls == []  # a fully custom model list never needs the built-in downloader
+
+
 def test_multiple_models_are_scored_independently() -> None:
     pytest.importorskip("numpy")
     detector = OpenWakeWordDetector(

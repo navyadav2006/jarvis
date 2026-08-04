@@ -42,7 +42,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 VOICE_FILENAME = "voice.yaml"
 
@@ -196,6 +196,81 @@ class SpeechQueueConfig(BaseModel):
     poll_interval_seconds: float = Field(0.05, gt=0.0)
 
 
+class MicrophoneConfig(BaseModel):
+    """Tuning for SoundDeviceMicrophone (core/speech/sounddevice_io.py).
+
+    Added alongside the first real MicrophonePort implementation — no
+    prior phase needed device/format fields since only Null/test
+    doubles existed. 16000/1/16-bit is a fixed requirement, not a
+    default to change casually: whisper.cpp, webrtcvad, and
+    openWakeWord (Phases 6/8) all expect 16kHz mono 16-bit PCM, and
+    nothing in the speech module resamples (see core/speech/audio.py's
+    module docstring).
+
+    BUG FIX (Cowork-correction follow-up): `block_size` originally
+    defaulted to 1600 (100ms). WebRtcVoiceActivityDetector
+    (core/speech/vad.py) requires *exactly* a 10, 20, or 30ms frame per
+    `is_speech()` call and raises `SpeechError` on anything else — and
+    `JarvisVoicePipeline._audio_loop` feeds whatever size chunk the
+    MicrophonePort produces straight into it during LISTENING, with no
+    resizing in between. A 100ms chunk crashed the pipeline's one
+    background thread the instant the wake word fired and a real
+    utterance started — silently, since nothing monitors that thread —
+    which looked to a user like "wake word worked, then nothing ever
+    happened." OpenWakeWordDetector has no such constraint (it buffers
+    internally regardless of chunk size — see its own docstring), so
+    20ms is safe for both. Caught by actually saying "hey jarvis" and
+    watching the whole pipeline die, not by reading the code.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    # None = sounddevice's configured default input device. An int
+    # (PortAudio device index) or str (substring match against a
+    # device name) selects a specific one — see `python -m
+    # sounddevice` to list what's available on this machine.
+    device: int | str | None = None
+    sample_rate: int = 16000
+    channels: int = 1
+    # Frames per captured block. Must produce a WebRTC-VAD-legal frame
+    # duration (10/20/30ms at 16kHz = 160/320/480 samples) — see the
+    # class docstring's BUG FIX note. 320 = 20ms, the standard middle
+    # ground: low enough for responsive barge-in/wake-word detection,
+    # high enough to avoid excessive callback overhead.
+    block_size: int = Field(320, gt=0)
+
+    @model_validator(mode="after")
+    def _block_size_is_a_legal_vad_frame(self) -> "MicrophoneConfig":
+        # Mirrors WebRtcVoiceActivityDetector's own hard requirement
+        # (core/speech/vad.py's _VALID_FRAME_MS/_VALID_SAMPLE_RATES) —
+        # duplicated here rather than imported, since core/config/ must
+        # not depend on core/speech/. This is the config-time half of
+        # the fix for the bug documented in the class docstring: catch
+        # an incompatible block_size at startup, not mid-conversation
+        # when a real utterance first reaches the VAD.
+        frame_ms = (self.block_size * 1000) / self.sample_rate
+        if round(frame_ms, 6) not in (10.0, 20.0, 30.0):
+            raise ValueError(
+                f"mic.block_size={self.block_size} at mic.sample_rate={self.sample_rate} "
+                f"produces a {frame_ms:g}ms frame, but WebRtcVoiceActivityDetector requires "
+                "exactly 10, 20, or 30ms per frame — e.g. block_size=320 for 20ms at 16000Hz"
+            )
+        return self
+    # Bounds SoundDeviceMicrophone's internal queue.Queue — see its
+    # docstring for why a full queue drops the oldest chunk rather
+    # than blocking the real-time audio callback.
+    queue_size: int = Field(50, gt=0)
+
+
+class AudioPlayerConfig(BaseModel):
+    """Tuning for SoundDeviceAudioPlayer (core/speech/sounddevice_io.py)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    # None = sounddevice's configured default output device.
+    device: int | str | None = None
+
+
 class VoiceConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -206,3 +281,5 @@ class VoiceConfig(BaseModel):
     listening: ListeningConfig = Field(default_factory=ListeningConfig)
     streaming: StreamingConfig = Field(default_factory=StreamingConfig)
     queue: SpeechQueueConfig = Field(default_factory=SpeechQueueConfig)
+    mic: MicrophoneConfig = Field(default_factory=MicrophoneConfig)
+    player: AudioPlayerConfig = Field(default_factory=AudioPlayerConfig)

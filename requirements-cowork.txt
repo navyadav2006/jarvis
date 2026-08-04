@@ -1,6 +1,7 @@
 # Optional: only needed to actually run HttpCoworkTransport, the real
-# core/cowork/ HTTP backend. CoworkClient's retry/timeout/parsing logic
-# imports nothing here and is fully tested against a fake transport.
+# core/cowork/ backend — calls the real Claude API via the official
+# `anthropic` SDK. CoworkClient's retry/timeout/parsing logic imports
+# nothing here and is fully tested against a fake transport.
 #
 #   pip install -r requirements-cowork.txt
 #
@@ -8,4 +9,4 @@
 
 -r requirements.txt
 
-httpx>=0.27.0
+anthropic>=0.40.0

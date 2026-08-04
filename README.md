@@ -85,8 +85,9 @@ bus).
   machine, with conversation interruption (barge-in), automatic
   conversation follow-ups, and per-turn latency events. See
   `scripts/benchmark_voice_latency.py` /
-  `docs/benchmarks/voice_latency.md` for latency benchmarks. Still no
-  real microphone/speaker backend and not wired into `main.py`.
+  `docs/benchmarks/voice_latency.md` for latency benchmarks. At the
+  time, still no real microphone/speaker backend and not wired into
+  `main.py` — see the voice-wiring entry below for when that changed.
 - **Phase 12** — the Memory Manager collaborator: `core/memory/`'s
   `SqliteMemoryManager` (stdlib `sqlite3`, no embeddings) gives Jarvis
   a real, working long-term memory called via a structured API —
@@ -221,6 +222,32 @@ bus).
   and backward compatible: with no registry wired in (or a missing
   file), `CollaboratorSpec.render_prompt()` behaves exactly as it did
   in Phase 10, falling back to the hardcoded `prompt_template`.
+- **Voice wiring** — closes the gap Phase 11 left open: real
+  microphone/speaker I/O (`core/speech/sounddevice_io.py`'s
+  `SoundDeviceMicrophone`/`SoundDeviceAudioPlayer`, backed by
+  `sounddevice`) and a new `bootstrap()` step that constructs a real
+  `JarvisVoicePipeline` and starts it as a background thread, behind
+  `voice.yaml`'s `enabled` flag (still `false` by default). Requires
+  the `voice` extra installed *and* Whisper.cpp/Piper/openWakeWord
+  model files downloaded separately — see "Enabling real voice"
+  below and `docs/architecture.md`'s Voice Wiring section for exactly
+  what's needed and why enabling it without those in place fails
+  fast with a clear error instead of silently doing nothing.
+- **Cowork correction & enabling all capabilities** — found and fixed
+  a real bug: Cowork was calling a fabricated `/cowork/v1/tasks`
+  endpoint that never existed; `HttpCoworkTransport` now calls the
+  real Claude Messages API via the official `anthropic` SDK, with
+  structured outputs producing the plan-of-steps contract. Also found
+  and fixed a packaging bug where the built `jarvis.exe` silently
+  loaded every config default regardless of `config/*.yaml`, because
+  `PROJECT_ROOT` was computed from `__file__`, which resolves inside
+  PyInstaller's temp extraction dir. `cowork.yaml`/`execution.yaml`/
+  `memory.yaml`/`vault.yaml`/`voice.yaml` are now all enabled in this
+  repo's checked-in config, with real desktop/browser automation,
+  long-term+semantic memory, vault access, and full voice (verified
+  live against real hardware and downloaded models). See
+  `docs/architecture.md`'s Cowork Correction section for what's
+  deliberately still off (terminal command execution, plugins).
 
 See `docs/architecture.md` for the full design rationale, including a
 Phase-2-specific section on why every orchestrator dependency is
@@ -402,13 +429,14 @@ its `allowed_dirs`. Every operation is logged and published as an
 `.confirmation_required`, `.operation_failed`) regardless of outcome.
 See `docs/architecture.md`'s Phase 4 section for the full rationale.
 
-## Voice support (interfaces only)
+## Voice support: the interfaces
 
 `src/jarvis/core/voice/` defines the shape of a Microphone -> Speech-
-to-Text -> Assistant -> Text-to-Speech pipeline, but **there is no
-concrete implementation yet** — no real microphone, Whisper.cpp, or
-Piper integration, and nothing in `main.py` or the orchestrator
-references this package:
+to-Text -> Assistant -> Text-to-Speech pipeline. As of the voice-wiring
+phase, `main.py` *does* construct and start a real implementation
+behind `voice.yaml`'s `enabled` flag — see "Enabling real voice" below
+for what that takes. This section describes the interface layer these
+concrete backends implement:
 
 - **`ports.py`** — `MicrophonePort`, `VoiceActivityDetector`,
   `SpeechToTextPort`, `TextToSpeechPort`, `AudioPlayerPort` (`Protocol`s
@@ -552,8 +580,9 @@ specifies that a concrete implementation feeds audio through
 `wake_word.process()` (not `vad`/`stt`) while idle, only escalating to
 full listening once a word fires — and returns to
 `WAITING_FOR_WAKE_WORD` (not `IDLE`) once a conversation ends, so no
-manual restart is needed. Still not wired into `main.py`/the
-orchestrator.
+manual restart is needed. As of the voice-wiring phase, `main.py`
+*does* construct one of these when `voice.yaml`'s `wake_word.enabled`
+is true (see "Enabling real voice" below).
 
 - **`OpenWakeWordDetector`** — backed by
   [openWakeWord](https://github.com/dscripka/openWakeWord); the
@@ -594,6 +623,45 @@ tested (against a timer-based fake player) without it. See
 playback-time concern while speed is a fixed synthesis-time one, and
 why `SpeechQueue` polls rather than requiring `AudioPlayerPort` to
 support a completion callback.
+
+## Enabling real voice
+
+Voice is off by default (`voice.yaml`'s `enabled: false`). Turning it
+on requires two things beyond editing config, neither of which this
+codebase can do for you:
+
+1. **Install the `voice` extra** (adds `openwakeword`, `pywhispercpp`,
+   `webrtcvad`, `piper-tts`, `numpy`, and `sounddevice` — the real
+   microphone/speaker backend):
+
+   ```bash
+   pip install -e ".[voice]"
+   # or: pip install -r requirements-voice.txt
+   ```
+
+2. **Download model files** — none ship in the repo:
+   - **Whisper.cpp (speech-to-text)**: a `ggml-*.bin` model from
+     [ggerganov/whisper.cpp's model repo](https://huggingface.co/ggerganov/whisper.cpp)
+     (e.g. `ggml-base.en.bin`), saved to `voice.yaml`'s `stt.model_path`
+     (default `data/models/whisper/ggml-base.en.bin`).
+   - **Piper (text-to-speech)**: a voice's `.onnx` + `.onnx.json` from
+     [rhasspy/piper's voice list](https://github.com/rhasspy/piper/blob/master/VOICES.md)
+     (e.g. `en_US-lessac-medium`), saved to `tts.model_path`.
+   - **openWakeWord (wake word)**: built-in names like `hey_jarvis`
+     download automatically on first use; custom `.onnx`/`.tflite`
+     files go in `wake_word.models` as file paths.
+
+3. **Set `voice.yaml`'s `enabled: true`** (and pick a microphone/
+   speaker via `mic.device`/`player.device` if the system default
+   isn't what you want — run `python -m sounddevice` to list what's
+   available) and start Jarvis normally.
+
+If you enable voice without the extra installed, or without a
+required model file present, startup fails immediately with a clear
+`SpeechBackendUnavailableError` naming exactly what's missing — this
+is intentional (see `docs/architecture.md`'s Voice Wiring section for
+why a silent fallback would be worse here than everywhere else in
+Jarvis that degrades to a Null backend).
 
 ## How the orchestrator routes a request
 
